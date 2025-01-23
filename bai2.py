@@ -19,44 +19,52 @@ class KNN:
     
     def predict(self, X):
         predictions = []
-        print(f"\nPredicting using {self.distance_metric} distance...")
-        total = len(X)
+        # Chuyển đổi sang numpy array để tính toán vector hóa
+        X = np.array(X)
         
-        # Xử lý theo batch để tăng tốc
-        batch_size = 100
-        for i in range(0, len(X), batch_size):
-            batch = X[i:min(i + batch_size, len(X))]
-            batch_predictions = []
+        for x in X:
+            # Tính khoảng cách theo vector hóa
+            if self.distance_metric == 'euclidean':
+                distances = np.sqrt(np.sum((self.X_train - x) ** 2, axis=1))
+            else:  # manhattan
+                distances = np.sum(np.abs(self.X_train - x), axis=1)
             
-            print(f"Processing {i}/{total} samples...", end='\r')
-            
-            for x in batch:
-                if self.distance_metric == 'euclidean':
-                    distances = np.sqrt(np.sum((self.X_train - x) ** 2, axis=1))
-                else:  # manhattan
-                    distances = np.sum(np.abs(self.X_train - x), axis=1)
-                    
-                k_indices = np.argpartition(distances, self.k)[:self.k]
-                k_nearest_labels = self.y_train[k_indices]
-                most_common = Counter(k_nearest_labels).most_common(1)
-                batch_predictions.append(most_common[0][0])
-                
-            predictions.extend(batch_predictions)
-            
-        print(f"\nCompleted processing {total} samples!")
+            k_indices = np.argsort(distances)[:self.k]
+            k_nearest_labels = self.y_train[k_indices]
+            most_common = Counter(k_nearest_labels).most_common(1)
+            predictions.append(most_common[0][0])
+        
         return np.array(predictions)
 
 def load_data(filename):
     try:
-        try:
-            data = np.loadtxt(filename, delimiter=',')
-        except:
-            data = np.loadtxt(filename, delimiter=' ')
-            
+        # Đọc file và xử lý từng dòng
+        data = []
+        with open(filename, 'r') as f:
+            for line in f:
+                # Thử các delimiter khác nhau
+                if ',' in line:
+                    values = line.strip().split(',')
+                else:
+                    values = line.strip().split()
+                
+                # Chuyển đổi sang float
+                values = [float(val) for val in values]
+                data.append(values)
+        
+        # Chuyển thành numpy array
+        data = np.array(data)
+        
+        # Tách features và labels
         X = data[:, :-1]
         y = data[:, -1]
-        return X, y
         
+        # Chuyển đổi kiểu dữ liệu
+        X = X.astype(np.float32)
+        y = y.astype(np.int32)
+        
+        return X, y
+    
     except Exception as e:
         print(f"Error loading file {filename}: {str(e)}")
         sys.exit(1)
@@ -78,28 +86,25 @@ def main():
     test_file = sys.argv[2]
     k = int(sys.argv[3])
     
-    print(f"\nLoading training data from {train_file}...")
+    print(f"Loading training data from {train_file}...")
     X_train, y_train = load_data(train_file)
-    print(f"Training data shape: {X_train.shape}")
     
     print(f"Loading test data from {test_file}...")
     X_test, y_test = load_data(test_file)
-    print(f"Test data shape: {X_test.shape}")
     
-    # Test với cả 2 loại khoảng cách
-    for distance in ['euclidean', 'manhattan']:
-        print(f"\nTesting with {distance} distance:")
-        knn = KNN(k=k, distance_metric=distance)
-        knn.fit(X_train, y_train)
-        y_pred = knn.predict(X_test)
-        
-        accuracy = np.mean(y_pred == y_test)
-        conf_matrix = calculate_confusion_matrix(y_test, y_pred)
-        
-        print(f"\nResults for k={k} using {distance} distance:")
-        print(f"Accuracy: {accuracy:.4f}")
-        print("\nConfusion Matrix:")
-        print(conf_matrix)
+    knn = KNN(k=k)
+    knn.fit(X_train, y_train)
+    
+    print("Predicting...")  # Thêm thông báo để biết tiến độ
+    y_pred = knn.predict(X_test)
+    
+    print("Calculating metrics...")
+    conf_matrix = calculate_confusion_matrix(y_test, y_pred)
+    accuracy = np.mean(y_pred == y_test)
+    
+    print("Confusion matrix:")
+    print(conf_matrix)
+    print(f"\nAccuracy: {accuracy}")
 
 if __name__ == "__main__":
     main()
